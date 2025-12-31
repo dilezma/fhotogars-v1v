@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - FotoStorage</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1><i class="fas fa-shield-alt"></i> Admin Dashboard</h1>
+            </div>
+            <div class="admin-controls">
+                <button class="btn-admin" id="refreshBtn">
+                    <i class="fas fa-sync-alt"></i> Refresh Data
+                </button>
+                <button class="btn-logout" onclick="window.location.href='login.html'">
+                    <i class="fas fa-sign-out-alt"></i> Keluar Admin
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Admin Stats -->
+        <div class="stats-grid">
+            <div class="stat-card stat-1">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalAllPhotos">0</h3>
+                    <p>Total Semua Foto</p>
+                </div>
+            </div>
+            <div class="stat-card stat-2">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalDeletedPhotos">0</h3>
+                    <p>Total Foto Dihapus</p>
+                </div>
+            </div>
+            <div class="stat-card stat-3">
+                <div class="stat-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalUsers">0</h3>
+                    <p>Total User Terdaftar</p>
+                </div>
+            </div>
+            <div class="stat-card stat-4">
+                <div class="stat-icon">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalStorage">0 MB</h3>
+                    <p>Storage Digunakan</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Actions -->
+        <div class="actions">
+            <h2 style="color: #333;">Manajemen Pengguna</h2>
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchUserInput" placeholder="Cari user...">
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="users-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="50">NO</th>
+                        <th>USERNAME</th>
+                        <th width="150">TOTAL FOTO</th>
+                        <th width="200">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr>
+                        <td colspan="4" class="loading-spinner">
+                            <div class="spinner"></div>
+                            <p>Memuat data pengguna...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Confirm Delete Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content confirm-modal-content">
+            <div class="modal-header">
+                <h2>Konfirmasi Hapus User</h2>
+                <button class="close-modal" id="closeConfirmModal">&times;</button>
+            </div>
+            <div class="confirm-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Hapus User: <span id="deleteUserName"></span></h3>
+            <p style="color: #f72585; margin: 20px 0;">
+                <i class="fas fa-exclamation-circle"></i> PERINGATAN: Semua foto user ini juga akan dihapus!
+            </p>
+            <p>Apakah Anda yakin ingin menghapus user ini?</p>
+            <div class="confirm-buttons">
+                <button class="btn-cancel" id="cancelDeleteBtn">Batal</button>
+                <button class="btn-confirm" id="confirmDeleteBtn">Hapus User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbRL8v4asVhvsanRdQKw7qFre0kG-_mCg",
+            authDomain: "memekoanj.firebaseapp.com",
+            projectId: "memekoanj",
+            storageBucket: "memekoanj.firebasestorage.app",
+            messagingSenderId: "116035720496",
+            appId: "1:116035720496:web:b4f76062bec737f77164f5",
+            measurementId: "G-MRY81LTBSG"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        
+        // Global Variables
+        let allUsers = [];
+        let userToDelete = null;
+        
+        // DOM Elements
+        const totalAllPhotosElement = document.getElementById('totalAllPhotos');
+        const totalDeletedPhotosElement = document.getElementById('totalDeletedPhotos');
+        const totalUsersElement = document.getElementById('totalUsers');
+        const totalStorageElement = document.getElementById('totalStorage');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const searchUserInput = document.getElementById('searchUserInput');
+        const usersTableBody = document.getElementById('usersTableBody');
+        const confirmModal = document.getElementById('confirmModal');
+        const closeConfirmModal = document.getElementById('closeConfirmModal');
+        const deleteUserNameElement = document.getElementById('deleteUserName');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        const toast = document.getElementById('toast');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAdminStats();
+            loadUsers();
+            setupEventListeners();
+        });
+        
+        // Load Admin Stats
+        async function loadAdminStats() {
+            try {
+                // Get all users
+                const usersSnapshot = await db.collection('users').get();
+                const users = [];
+                usersSnapshot.forEach(doc => users.push(doc.data()));
+                
+                // Get all photos
+                const photosSnapshot = await db.collection('photos').get();
+                const allPhotos = [];
+                const activePhotos = [];
+                const deletedPhotos = [];
+                let totalStorageUsed = 0;
+                
+                photosSnapshot.forEach(doc => {
+                    const photo = doc.data();
+                    allPhotos.push(photo);
+                    totalStorageUsed += photo.size || 0;
+                    
+                    if (photo.deleted) {
+                        deletedPhotos.push(photo);
+                    } else {
+                        activePhotos.push(photo);
+                    }
+                });
+                
+                // Update stats
+                totalAllPhotosElement.textContent = allPhotos.length;
+                totalDeletedPhotosElement.textContent = deletedPhotos.length;
+                totalUsersElement.textContent = users.length;
+                totalStorageElement.textContent = formatStorage(totalStorageUsed);
+                
+            } catch (error) {
+                console.error('Error loading admin stats:', error);
+                showToast('Gagal memuat statistik admin', 'error');
+            }
+        }
+        
+        // Load Users
+        async function loadUsers() {
+            usersTableBody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p>Memuat data pengguna...</p>
+                    </td>
+                </tr>
+            `;
+            
+            try {
+                // Get all users
+                const usersSnapshot = await db.collection('users').get();
+                allUsers = [];
+                usersSnapshot.forEach(doc => {
+                    allUsers.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                // For each user, count their active photos
+                const usersWithPhotoCount = await Promise.all(allUsers.map(async (user) => {
+                    const photosSnapshot = await db.collection('photos')
+                        .where('userId', '==', user.id)
+                        .where('deleted', '==', false)
+                        .get();
+                    
+                    return {
+                        ...user,
+                        activePhotosCount: photosSnapshot.size
+                    };
+                }));
+                
+                renderUsersTable(usersWithPhotoCount);
+                
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showToast('Gagal memuat data pengguna', 'error');
+                usersTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="empty-state">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Gagal memuat data pengguna</p>
+                            <button class="btn-admin" onclick="loadUsers()" style="margin-top: 20px;">
+                                <i class="fas fa-redo"></i> Coba Lagi
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        // Render Users Table
+        function renderUsersTable(users) {
+            if (users.length === 0) {
+                usersTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="empty-state">
+                            <i class="fas fa-users-slash"></i>
+                            <p>Belum ada user terdaftar</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            usersTableBody.innerHTML = '';
+            
+            users.forEach((user, index) => {
+                const createdAt = user.createdAt?.toDate();
+                const formattedDate = createdAt ? createdAt.toLocaleDateString('id-ID') : 'N/A';
+                
+                // Get first letter for avatar
+                const firstLetter = user.username 
+                    ? user.username.charAt(0).toUpperCase()
+                    : 'U';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>
+                        <div class="user-cell">
+                            <div class="user-avatar">${firstLetter}</div>
+                            <div class="user-info">
+                                <h4>${user.username || 'Unknown User'}</h4>
+                                <small>ID: ${user.id}</small>
+                                <br>
+                                <small style="color: #999;">Bergabung: ${formattedDate}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <strong>${user.activePhotosCount || 0}</strong> foto
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-action btn-delete-user" data-user-id="${user.id}" data-user-name="${user.username || 'Unknown'}">
+                                <i class="fas fa-user-slash"></i> Hapus User
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                usersTableBody.appendChild(row);
+            });
+            
+            // Add event listeners to delete buttons
+            document.querySelectorAll('.btn-delete-user').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const userName = this.dataset.userName;
+                    confirmDeleteUser(userId, userName);
+                });
+            });
+        }
+        
+        // Confirm Delete User
+        function confirmDeleteUser(userId, userName) {
+            userToDelete = userId;
+            deleteUserNameElement.textContent = userName;
+            confirmModal.style.display = 'block';
+        }
+        
+        // Delete User
+        async function deleteUser() {
+            if (!userToDelete) return;
+            
+            try {
+                // First, get all user's photos to delete from storage
+                const photosSnapshot = await db.collection('photos')
+                    .where('userId', '==', userToDelete)
+                    .get();
+                
+                // Delete user's photos from Firestore
+                const deletePromises = photosSnapshot.docs.map(doc => doc.ref.delete());
+                await Promise.all(deletePromises);
+                
+                // Delete user document
+                await db.collection('users').doc(userToDelete).delete();
+                
+                // Close modal
+                confirmModal.style.display = 'none';
+                
+                // Show success message
+                showToast('User berhasil dihapus', 'success');
+                
+                // Reload data
+                loadAdminStats();
+                loadUsers();
+                
+                userToDelete = null;
+                
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showToast('Gagal menghapus user', 'error');
+            }
+        }
+        
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // Refresh button
+            refreshBtn.addEventListener('click', () => {
+                loadAdminStats();
+                loadUsers();
+                showToast('Data diperbarui', 'info');
+            });
+            
+            // Search input
+            searchUserInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                if (!searchTerm) {
+                    loadUsers();
+                    return;
+                }
+                
+                const filteredUsers = allUsers.filter(user => 
+                    user.username && user.username.toLowerCase().includes(searchTerm)
+                );
+                
+                renderUsersTable(filteredUsers.map(user => ({
+                    ...user,
+                    activePhotosCount: user.activePhotosCount || 0
+                })));
+            });
+            
+            // Confirm modal
+            closeConfirmModal.addEventListener('click', () => {
+                confirmModal.style.display = 'none';
+                userToDelete = null;
+            });
+            
+            cancelDeleteBtn.addEventListener('click', () => {
+                confirmModal.style.display = 'none';
+                userToDelete = null;
+            });
+            
+            confirmDeleteBtn.addEventListener('click', deleteUser);
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', (e) => {
+                if (e.target === confirmModal) {
+                    confirmModal.style.display = 'none';
+                    userToDelete = null;
+                }
+            });
+        }
+        
+        // Format Storage Size
+        function formatStorage(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        // Show Toast Notification
+        function showToast(message, type = 'info') {
+            // Set toast content and style
+            toast.textContent = message;
+            toast.className = `toast toast-${type}`;
+            
+            // Set icon based on type
+            let icon = 'info-circle';
+            if (type === 'success') icon = 'check-circle';
+            if (type === 'error') icon = 'exclamation-circle';
+            
+            toast.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+            
+            // Show toast
+            toast.classList.add('show');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-storage-compat.js"></script>
+</body>
+</html>

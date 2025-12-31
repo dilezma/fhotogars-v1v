@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - FotoStorage</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1><i class="fas fa-camera"></i> FotoStorage</h1>
+            </div>
+            <div class="user-info">
+                <div class="user-avatar-small" id="userAvatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <div id="userName">Loading...</div>
+                    <small id="userStats">0 foto</small>
+                </div>
+                <button class="btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Keluar
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Stats Section -->
+        <div class="stats-grid">
+            <div class="stat-card stat-1">
+                <div class="stat-icon">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="totalPhotos">0</h3>
+                    <p>Foto Ditambahkan</p>
+                </div>
+            </div>
+            <div class="stat-card stat-2">
+                <div class="stat-icon">
+                    <i class="fas fa-trash"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="deletedPhotos">0</h3>
+                    <p>Foto Dihapus</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="btn-primary" id="addPhotoBtn">
+                <i class="fas fa-plus"></i> Tambah Foto
+            </button>
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Cari foto...">
+            </div>
+        </div>
+
+        <!-- Photos Grid -->
+        <div class="photos-grid" id="photosGrid">
+            <!-- Photos will be loaded here -->
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner"></div>
+                <p>Memuat foto...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Upload Modal -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cloud-upload-alt"></i> Upload Foto</h2>
+                <button class="close-modal" id="closeUploadModal">&times;</button>
+            </div>
+            <div class="drop-area" id="dropArea">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h3>Drag & Drop foto di sini</h3>
+                <p>atau</p>
+                <input type="file" id="fileInput" class="file-input" accept="image/*" multiple>
+                <label for="fileInput" class="file-label">Pilih File</label>
+                <p style="margin-top: 15px; color: #6c757d; font-size: 0.9rem;">
+                    Maksimal 5MB per foto. Format: JPG, PNG, GIF
+                </p>
+            </div>
+            <div class="selected-files" id="selectedFiles"></div>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+            <button class="btn-primary" id="uploadBtn" style="width: 100%; margin-top: 20px;">
+                <i class="fas fa-upload"></i> Upload Foto
+            </button>
+        </div>
+    </div>
+
+    <!-- Photo Modal -->
+    <div class="modal" id="photoModal">
+        <div class="modal-content photo-modal-content">
+            <button class="close-modal" id="closePhotoModal" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); color: white; width: 40px; height: 40px; border-radius: 50%;">&times;</button>
+            <img id="largePhoto" class="photo-large" alt="Foto">
+            <div class="photo-actions">
+                <button class="btn-download" id="downloadBtn">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button class="btn-delete" id="deleteBtn">
+                    <i class="fas fa-trash"></i> Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content confirm-modal-content">
+            <div class="confirm-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h2>Konfirmasi Hapus</h2>
+            <p>Apakah Anda yakin ingin menghapus foto ini?</p>
+            <p style="color: #f72585; font-size: 0.9rem; margin-top: 10px;">
+                <i class="fas fa-info-circle"></i> Aksi ini tidak dapat dibatalkan
+            </p>
+            <div class="confirm-buttons">
+                <button class="btn-cancel" id="cancelDeleteBtn">Batal</button>
+                <button class="btn-confirm" id="confirmDeleteBtn">Hapus</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-storage-compat.js"></script>
+    
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbRL8v4asVhvsanRdQKw7qFre0kG-_mCg",
+            authDomain: "memekoanj.firebaseapp.com",
+            projectId: "memekoanj",
+            storageBucket: "memekoanj.firebasestorage.app",
+            messagingSenderId: "116035720496",
+            appId: "1:116035720496:web:b4f76062bec737f77164f5",
+            measurementId: "G-MRY81LTBSG"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        
+        // Global Variables
+        let currentUser = null;
+        let userPhotos = [];
+        let currentPhotoId = null;
+        
+        // DOM Elements
+        const userNameElement = document.getElementById('userName');
+        const userAvatarElement = document.getElementById('userAvatar');
+        const userStatsElement = document.getElementById('userStats');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const totalPhotosElement = document.getElementById('totalPhotos');
+        const deletedPhotosElement = document.getElementById('deletedPhotos');
+        const addPhotoBtn = document.getElementById('addPhotoBtn');
+        const searchInput = document.getElementById('searchInput');
+        const photosGrid = document.getElementById('photosGrid');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        
+        // Modals
+        const uploadModal = document.getElementById('uploadModal');
+        const photoModal = document.getElementById('photoModal');
+        const confirmModal = document.getElementById('confirmModal');
+        
+        // Upload Modal Elements
+        const closeUploadModal = document.getElementById('closeUploadModal');
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFilesDiv = document.getElementById('selectedFiles');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const uploadBtn = document.getElementById('uploadBtn');
+        
+        // Photo Modal Elements
+        const closePhotoModal = document.getElementById('closePhotoModal');
+        const largePhoto = document.getElementById('largePhoto');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+        
+        // Confirm Modal Elements
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        
+        // Toast
+        const toast = document.getElementById('toast');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            setupEventListeners();
+        });
+        
+        // Check Authentication
+        function checkAuth() {
+            const userLoggedIn = sessionStorage.getItem('userLoggedIn');
+            const username = sessionStorage.getItem('username');
+            const userId = sessionStorage.getItem('userId');
+            
+            if (userLoggedIn === 'true' && username && userId) {
+                currentUser = {
+                    username: username,
+                    userId: userId
+                };
+                updateUserInfo();
+                loadUserStats();
+                loadPhotos();
+            } else {
+                // Redirect to login if not authenticated
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Update User Info in Header
+        function updateUserInfo() {
+            if (currentUser) {
+                userNameElement.textContent = currentUser.username;
+                
+                // Update avatar with first letter
+                const firstLetter = currentUser.username.charAt(0).toUpperCase();
+                userAvatarElement.innerHTML = `<span>${firstLetter}</span>`;
+            }
+        }
+        
+        // Load User Stats
+        async function loadUserStats() {
+            if (!currentUser) return;
+            
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.userId).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    totalPhotosElement.textContent = userData.totalUploads || 0;
+                    deletedPhotosElement.textContent = userData.totalDeletes || 0;
+                    userStatsElement.textContent = `${userData.totalPhotos || 0} foto`;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                showToast('Gagal memuat statistik', 'error');
+            }
+        }
+        
+        // Load Photos
+        async function loadPhotos() {
+            if (!currentUser) return;
+            
+            loadingSpinner.style.display = 'block';
+            photosGrid.innerHTML = '';
+            photosGrid.appendChild(loadingSpinner);
+            
+            try {
+                // Query photos where deleted is false
+                const photosSnapshot = await db.collection('photos')
+                    .where('userId', '==', currentUser.userId)
+                    .where('deleted', '==', false)
+                    .orderBy('uploadedAt', 'desc')
+                    .get();
+                
+                userPhotos = [];
+                photosGrid.innerHTML = '';
+                
+                if (photosSnapshot.empty) {
+                    showEmptyState();
+                    return;
+                }
+                
+                photosSnapshot.forEach(doc => {
+                    userPhotos.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                renderPhotos(userPhotos);
+                
+            } catch (error) {
+                console.error('Error loading photos:', error);
+                showToast('Gagal memuat foto', 'error');
+                showEmptyState();
+            } finally {
+                loadingSpinner.style.display = 'none';
+            }
+        }
+        
+        // Render Photos to Grid
+        function renderPhotos(photos) {
+            photosGrid.innerHTML = '';
+            
+            if (photos.length === 0) {
+                showEmptyState();
+                return;
+            }
+            
+            photos.forEach(photo => {
+                const photoCard = createPhotoCard(photo);
+                photosGrid.appendChild(photoCard);
+            });
+        }
+        
+        // Create Photo Card Element
+        function createPhotoCard(photo) {
+            const card = document.createElement('div');
+            card.className = 'photo-card';
+            card.dataset.id = photo.id;
+            
+            // Format date
+            const date = photo.uploadedAt?.toDate();
+            const formattedDate = date ? date.toLocaleDateString('id-ID') : 'Tanggal tidak tersedia';
+            
+            // Truncate filename if too long
+            const filename = photo.filename.length > 25 
+                ? photo.filename.substring(0, 22) + '...' 
+                : photo.filename;
+            
+            card.innerHTML = `
+                <img src="${photo.url}" alt="${photo.filename}" class="photo-thumbnail">
+                <div class="photo-info">
+                    <div class="photo-name" title="${photo.filename}">${filename}</div>
+                    <div class="photo-meta">
+                        <span><i class="far fa-calendar"></i> ${formattedDate}</span>
+                        <span><i class="fas fa-weight-hanging"></i> ${formatFileSize(photo.size)}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Add click event to open photo modal
+            card.addEventListener('click', () => openPhotoModal(photo));
+            
+            return card;
+        }
+        
+        // Show Empty State
+        function showEmptyState() {
+            photosGrid.innerHTML = `
+                <div class="empty-state">
+                    <i class="far fa-images"></i>
+                    <h3>Belum ada foto</h3>
+                    <p>Mulai dengan mengupload foto pertama Anda!</p>
+                    <button class="btn-primary" id="uploadFirstBtn" style="margin-top: 20px;">
+                        <i class="fas fa-plus"></i> Upload Foto Pertama
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('uploadFirstBtn')?.addEventListener('click', openUploadModal);
+        }
+        
+        // Open Upload Modal
+        function openUploadModal() {
+            uploadModal.style.display = 'block';
+            selectedFilesDiv.innerHTML = '';
+            progressContainer.style.display = 'none';
+            fileInput.value = '';
+        }
+        
+        // Open Photo Modal
+        function openPhotoModal(photo) {
+            currentPhotoId = photo.id;
+            largePhoto.src = photo.url;
+            largePhoto.alt = photo.filename;
+            photoModal.style.display = 'block';
+        }
+        
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // Logout
+            logoutBtn.addEventListener('click', () => {
+                // Clear session storage
+                sessionStorage.clear();
+                
+                // Redirect to login
+                window.location.href = 'login.html';
+            });
+            
+            // Add Photo Button
+            addPhotoBtn.addEventListener('click', openUploadModal);
+            
+            // Search
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                if (searchTerm) {
+                    const filteredPhotos = userPhotos.filter(photo => 
+                        photo.filename.toLowerCase().includes(searchTerm)
+                    );
+                    renderPhotos(filteredPhotos);
+                } else {
+                    renderPhotos(userPhotos);
+                }
+            });
+            
+            // Upload Modal
+            closeUploadModal.addEventListener('click', () => {
+                uploadModal.style.display = 'none';
+            });
+            
+            // Drag & Drop
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.classList.add('dragover');
+            });
+            
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.classList.remove('dragover');
+            });
+            
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
+            
+            // File Input
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+            
+            // Upload Button
+            uploadBtn.addEventListener('click', uploadFiles);
+            
+            // Photo Modal
+            closePhotoModal.addEventListener('click', () => {
+                photoModal.style.display = 'none';
+                currentPhotoId = null;
+            });
+            
+            // Download Button
+            downloadBtn.addEventListener('click', downloadPhoto);
+            
+            // Delete Button
+            deleteBtn.addEventListener('click', () => {
+                photoModal.style.display = 'none';
+                confirmModal.style.display = 'block';
+            });
+            
+            // Confirm Delete Modal
+            cancelDeleteBtn.addEventListener('click', () => {
+                confirmModal.style.display = 'none';
+                photoModal.style.display = 'block';
+            });
+            
+            confirmDeleteBtn.addEventListener('click', deletePhoto);
+            
+            // Close modals when clicking outside
+            window.addEventListener('click', (e) => {
+                if (e.target === uploadModal) uploadModal.style.display = 'none';
+                if (e.target === photoModal) {
+                    photoModal.style.display = 'none';
+                    currentPhotoId = null;
+                }
+                if (e.target === confirmModal) {
+                    confirmModal.style.display = 'none';
+                    photoModal.style.display = 'block';
+                }
+            });
+        }
+        
+        // Handle Selected Files
+        function handleFiles(files) {
+            selectedFilesDiv.innerHTML = '';
+            const validFiles = [];
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    showToast(`File "${file.name}" bukan gambar`, 'error');
+                    continue;
+                }
+                
+                // Validate file size (5MB max)
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast(`File "${file.name}" terlalu besar (maks 5MB)`, 'error');
+                    continue;
+                }
+                
+                validFiles.push(file);
+                
+                // Add to selected files list
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span>${file.name}</span>
+                    <span>${formatFileSize(file.size)}</span>
+                `;
+                selectedFilesDiv.appendChild(fileItem);
+            }
+            
+            // Store valid files in data attribute
+            uploadBtn.dataset.files = JSON.stringify(validFiles.map(file => ({
+                name: file.name,
+                size: file.size,
+                type: file.type
+            })));
+        }
+        
+        // Upload Files to Firebase
+        async function uploadFiles() {
+            const files = JSON.parse(uploadBtn.dataset.files || '[]');
+            if (files.length === 0) {
+                showToast('Pilih file terlebih dahulu', 'error');
+                return;
+            }
+            
+            uploadBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            
+            let uploadCount = 0;
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (const fileData of files) {
+                uploadCount++;
+                
+                try {
+                    // Create a reference to the storage location
+                    const storageRef = storage.ref().child(`photos/${currentUser.userId}/${Date.now()}_${fileData.name}`);
+                    
+                    // Get the actual file from the file input
+                    const file = fileInput.files[uploadCount - 1] || new File([], fileData.name, { type: fileData.type });
+                    
+                    // Upload file
+                    const uploadTask = storageRef.put(file);
+                    
+                    // Monitor upload progress
+                    uploadTask.on('state_changed', 
+                        (snapshot) => {
+                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                            progressFill.style.width = `${progress}%`;
+                            progressText.textContent = `${Math.round(progress)}% - Mengupload ${fileData.name}`;
+                        },
+                        (error) => {
+                            console.error('Upload error:', error);
+                            errorCount++;
+                            showToast(`Gagal upload ${fileData.name}`, 'error');
+                        },
+                        async () => {
+                            // Upload completed
+                            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                            
+                            // Create photo document in Firestore
+                            await db.collection('photos').add({
+                                userId: currentUser.userId,
+                                username: currentUser.username,
+                                filename: fileData.name,
+                                url: downloadURL,
+                                size: fileData.size,
+                                uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                deleted: false
+                            });
+                            
+                            // Update user stats
+                            await db.collection('users').doc(currentUser.userId).update({
+                                totalUploads: firebase.firestore.FieldValue.increment(1),
+                                totalPhotos: firebase.firestore.FieldValue.increment(1),
+                                storageUsed: firebase.firestore.FieldValue.increment(fileData.size)
+                            });
+                            
+                            successCount++;
+                            
+                            // If all uploads completed
+                            if (successCount + errorCount === files.length) {
+                                progressText.textContent = `Selesai! ${successCount} berhasil, ${errorCount} gagal`;
+                                
+                                setTimeout(() => {
+                                    uploadModal.style.display = 'none';
+                                    uploadBtn.disabled = false;
+                                    
+                                    if (successCount > 0) {
+                                        showToast(`${successCount} foto berhasil diupload`, 'success');
+                                        loadUserStats();
+                                        loadPhotos();
+                                    }
+                                }, 1500);
+                            }
+                        }
+                    );
+                    
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    errorCount++;
+                    showToast(`Gagal upload ${fileData.name}`, 'error');
+                }
+            }
+        }
+        
+        // Download Photo
+        function downloadPhoto() {
+            if (!currentPhotoId) return;
+            
+            const photo = userPhotos.find(p => p.id === currentPhotoId);
+            if (!photo) return;
+            
+            // Create a temporary link element
+            const link = document.createElement('a');
+            link.href = photo.url;
+            link.download = photo.filename;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Foto sedang didownload', 'info');
+        }
+        
+        // Delete Photo
+        async function deletePhoto() {
+            if (!currentPhotoId) return;
+            
+            try {
+                // Update photo document to mark as deleted
+                await db.collection('photos').doc(currentPhotoId).update({
+                    deleted: true,
+                    deletedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update user stats
+                await db.collection('users').doc(currentUser.userId).update({
+                    totalDeletes: firebase.firestore.FieldValue.increment(1),
+                    totalPhotos: firebase.firestore.FieldValue.increment(-1)
+                });
+                
+                // Close modals
+                confirmModal.style.display = 'none';
+                photoModal.style.display = 'none';
+                
+                // Show success message
+                showToast('Foto berhasil dihapus', 'success');
+                
+                // Reload data
+                loadUserStats();
+                loadPhotos();
+                
+                currentPhotoId = null;
+                
+            } catch (error) {
+                console.error('Delete error:', error);
+                showToast('Gagal menghapus foto', 'error');
+            }
+        }
+        
+        // Show Toast Notification
+        function showToast(message, type = 'info') {
+            // Set toast content and style
+            toast.textContent = message;
+            toast.className = `toast toast-${type}`;
+            
+            // Set icon based on type
+            let icon = 'info-circle';
+            if (type === 'success') icon = 'check-circle';
+            if (type === 'error') icon = 'exclamation-circle';
+            
+            toast.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+            
+            // Show toast
+            toast.classList.add('show');
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // Format File Size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

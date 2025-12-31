@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - FotoStorage</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-container">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1><i class="fas fa-camera"></i> FotoStorage</h1>
+            <p>Masuk dengan username Anda</p>
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="username" class="form-control" placeholder="Masukkan username" required>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div> <span>Memproses...</span>
+            </div>
+            
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-sign-in-alt"></i> Masuk
+            </button>
+        </form>
+        
+        <div class="login-links">
+            <p><a href="admin.html">Halaman Admin</a></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-storage-compat.js"></script>
+    
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbRL8v4asVhvsanRdQKw7qFre0kG-_mCg",
+            authDomain: "memekoanj.firebaseapp.com",
+            projectId: "memekoanj",
+            storageBucket: "memekoanj.firebasestorage.app",
+            messagingSenderId: "116035720496",
+            appId: "1:116035720496:web:b4f76062bec737f77164f5",
+            measurementId: "G-MRY81LTBSG"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        
+        // DOM Elements
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const alertDiv = document.getElementById('alert');
+        const loadingDiv = document.getElementById('loading');
+        
+        // Show Alert
+        function showAlert(message, type = 'danger') {
+            alertDiv.textContent = message;
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Simple login without Firebase Auth
+        async function loginUser(username) {
+            if (!username.trim()) {
+                showAlert('Username harus diisi!');
+                return false;
+            }
+            
+            loadingDiv.style.display = 'block';
+            
+            try {
+                // Generate a simple user ID
+                const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                // Save user to session storage
+                sessionStorage.setItem('userLoggedIn', 'true');
+                sessionStorage.setItem('username', username);
+                sessionStorage.setItem('userId', userId);
+                
+                // Check if user exists in Firestore
+                const userDoc = await db.collection('users').doc(userId).get();
+                
+                if (!userDoc.exists) {
+                    // Create new user document
+                    await db.collection('users').doc(userId).set({
+                        username: username,
+                        userId: userId,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                        totalUploads: 0,
+                        totalDeletes: 0,
+                        totalPhotos: 0,
+                        storageUsed: 0
+                    });
+                } else {
+                    // Update last login
+                    await db.collection('users').doc(userId).update({
+                        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // Show success message
+                showAlert('Login berhasil! Mengalihkan...', 'success');
+                
+                // Redirect to index.html after 1 second
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1000);
+                
+                return true;
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                showAlert('Login gagal! ' + error.message);
+                return false;
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+        
+        // Login Form Submission
+        loginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            await loginUser(username);
+        });
+        
+        // Check if user is already logged in (saat page load)
+        document.addEventListener('DOMContentLoaded', function() {
+            const userLoggedIn = sessionStorage.getItem('userLoggedIn');
+            const savedUsername = sessionStorage.getItem('username');
+            
+            if (userLoggedIn === 'true' && savedUsername) {
+                // Auto redirect to index if already logged in
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 500);
+            }
+        });
+        
+        // Try to focus on username input
+        window.addEventListener('load', function() {
+            usernameInput.focus();
+        });
+    </script>
+</body>
+</html>
